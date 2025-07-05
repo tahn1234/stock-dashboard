@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "pip install -r backend/requirements.txt"
+buildCommand = "pip3 install -r backend/requirements.txt"
 
 [deploy]
 startCommand = "python3 backend/server.py" 
