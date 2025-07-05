@@ -366,65 +366,64 @@ def fetch_initial_data():
             logging.info(f"Initialized {ticker} with mock data: ${mock_price}")
 
 def update_prices():
-    """Update prices using Finnhub only, fallback to mock data if Finnhub fails."""
+    """Update prices using Finnhub only, keep stable if no real data."""
     while True:
         try:
             with lock:
                 for ticker in TICKERS:
                     try:
                         price = fetch_finnhub_price(ticker)
-                        if price is None:
-                            price = generate_mock_price(ticker)
-                        old_price = price_data.get(ticker, price)
-                        price_data[ticker] = price
-                        stats_data[ticker]["high"] = max(stats_data[ticker]["high"], price)
-                        stats_data[ticker]["low"] = min(stats_data[ticker]["low"], price)
-                        # Check alerts
-                        alert_service.check_alerts(price_data)
-                        # Emit price update
-                        socketio.emit('price_update', {ticker: price}, room=ticker)
-                        if abs(price - old_price) > 0.01:
-                            logging.debug(f"Price update for {ticker}: ${price}")
+                        if price is not None:
+                            # Only update if we get real data from Finnhub
+                            old_price = price_data.get(ticker, price)
+                            price_data[ticker] = price
+                            stats_data[ticker]["high"] = max(stats_data[ticker]["high"], price)
+                            stats_data[ticker]["low"] = min(stats_data[ticker]["low"], price)
+                            # Check alerts
+                            alert_service.check_alerts(price_data)
+                            # Emit price update only if we have real data
+                            socketio.emit('price_update', {ticker: price}, room=ticker)
+                            if abs(price - old_price) > 0.01:
+                                logging.debug(f"Real price update for {ticker}: ${price}")
+                        # If no real data, keep current price stable
                     except Exception as e:
                         logging.error(f"Error updating price for {ticker}: {e}")
                 # Emit all prices and stats
                 socketio.emit('price_update', price_data)
                 socketio.emit('stats_update', stats_data)
-            time.sleep(10)  # Update every 10 seconds
+            time.sleep(30)  # Update every 30 seconds
         except Exception as e:
             logging.error(f"Error in update_prices loop: {e}")
-            time.sleep(10)
+            time.sleep(30)
 
 def simulate_price_changes():
-    """Simulate realistic price changes to make the UI more dynamic"""
+    """Keep current prices stable, only update stats occasionally"""
     while True:
         try:
             with lock:
                 for ticker in TICKERS:
                     current_price = price_data.get(ticker, 0)
                     if current_price > 0:
-                        # Much smaller, more realistic price changes (-0.1% to +0.1%)
-                        change_percent = random.uniform(-0.001, 0.001)
-                        new_price = current_price * (1 + change_percent)
+                        # Keep current price stable, only update stats occasionally
+                        # Update high/low if needed (but don't change current price)
+                        if random.random() < 0.1:  # 10% chance to update stats
+                            # Small variation for high/low
+                            variation = random.uniform(-0.0005, 0.0005)
+                            new_high = stats_data[ticker]["high"] * (1 + variation)
+                            new_low = stats_data[ticker]["low"] * (1 + variation)
+                            
+                            stats_data[ticker]["high"] = max(stats_data[ticker]["high"], new_high)
+                            stats_data[ticker]["low"] = min(stats_data[ticker]["low"], new_low)
+                            
+                            # Emit stats update only
+                            socketio.emit('stats_update', stats_data)
+                            logging.info(f"Updated stats for {ticker}")
                         
-                        # Update current price but keep previous close as yesterday's close
-                        price_data[ticker] = new_price
-                        
-                        # Update high/low if needed
-                        stats_data[ticker]["high"] = max(stats_data[ticker]["high"], new_price)
-                        stats_data[ticker]["low"] = min(stats_data[ticker]["low"], new_price)
-                        
-                        # Emit updates
-                        socketio.emit('price_update', {ticker: new_price}, room=ticker)
-                        socketio.emit('price_update', price_data)
-                        socketio.emit('stats_update', stats_data)
-                        logging.info(f"Simulated price change for {ticker}: ${current_price} -> ${new_price}")
-                        
-            time.sleep(60)  # Update every 60 seconds (more realistic)
+            time.sleep(120)  # Update every 2 minutes
             
         except Exception as e:
             logging.error(f"Error in simulate_price_changes: {e}")
-            time.sleep(60)
+            time.sleep(120)
 
 # Fetch initial data before starting the server
 fetch_initial_data()
