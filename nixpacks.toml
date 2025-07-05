@@ -1,11 +1,14 @@
 [phases.setup]
-nixPkgs = ["python3", "python3Packages.pip"]
+nixPkgs = ["python3", "python3Packages.pip", "python3Packages.venv"]
 
 [phases.install]
-cmds = ["pip install -r backend/requirements.txt"]
+cmds = [
+  "python -m venv venv",
+  "source venv/bin/activate && pip install -r backend/requirements.txt"
+]
 
 [phases.build]
 cmds = ["echo 'Build complete'"]
 
 [start]
-cmd = "cd backend && python server.py" 
+cmd = "cd backend && source ../venv/bin/activate && python server.py" 
