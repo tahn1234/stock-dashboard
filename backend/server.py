@@ -396,15 +396,15 @@ def update_prices():
             time.sleep(10)
 
 def simulate_price_changes():
-    """Simulate small price changes to make the UI more dynamic"""
+    """Simulate realistic price changes to make the UI more dynamic"""
     while True:
         try:
             with lock:
                 for ticker in TICKERS:
                     current_price = price_data.get(ticker, 0)
                     if current_price > 0:
-                        # Small random price change (-0.5% to +0.5%)
-                        change_percent = random.uniform(-0.005, 0.005)
+                        # Much smaller, more realistic price changes (-0.1% to +0.1%)
+                        change_percent = random.uniform(-0.001, 0.001)
                         new_price = current_price * (1 + change_percent)
                         
                         # Update current price but keep previous close as yesterday's close
@@ -420,11 +420,11 @@ def simulate_price_changes():
                         socketio.emit('stats_update', stats_data)
                         logging.info(f"Simulated price change for {ticker}: ${current_price} -> ${new_price}")
                         
-            time.sleep(10)  # Update every 10 seconds
+            time.sleep(60)  # Update every 60 seconds (more realistic)
             
         except Exception as e:
             logging.error(f"Error in simulate_price_changes: {e}")
-            time.sleep(10)
+            time.sleep(60)
 
 # Fetch initial data before starting the server
 fetch_initial_data()

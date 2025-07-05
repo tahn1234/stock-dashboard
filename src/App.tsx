@@ -361,6 +361,8 @@ function App() {
   }, [socket]);
 
   const PriceDisplay = ({ ticker, price, stats }: any) => {
+    console.log('PriceDisplay received:', { ticker, price, stats });
+    
     const previousClose = stats?.previousClose;
     const absChange = previousClose ? price - previousClose : 0;
     const percentChange = previousClose ? (absChange / previousClose) * 100 : 0;
