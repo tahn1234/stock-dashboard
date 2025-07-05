@@ -85,7 +85,9 @@ socketio = SocketIO(app,
     ],
     async_mode="threading",
     logger=False,
-    engineio_logger=False
+    engineio_logger=False,
+    ping_timeout=60,
+    ping_interval=25
 )
 
 # Initialize database and services
@@ -889,60 +891,46 @@ def generate_fallback_historical_data(ticker, period, interval, current_price):
     logging.info(f"Generated fallback data spanning from {data[0]['time']} to {data[-1]['time']}")
     return jsonify(data)
 
-# Add prediction-related functions only if TensorFlow is available
-if TENSORFLOW_AVAILABLE:
-    def get_data(ticker, lookback=100):
-        df = yf.download(ticker, period=f'{lookback+30}d', interval='1d')
-        return df['Close'].values[-lookback:]
-
-    def build_lstm_model(input_shape):
-        model = Sequential([
-            LSTM(50, return_sequences=True, input_shape=input_shape),
-            LSTM(50),
-            Dense(1)
-        ])
-        model.compile(optimizer='adam', loss='mse')
-        return model
-
-    @app.route('/predict', methods=['GET'])
-    def predict():
-        ticker = request.args.get('ticker', 'AAPL')
-        days = int(request.args.get('days', 7))
-        lookback = 100
-
-        # 1. Get and scale data
-        data = get_data(ticker, lookback)
-        scaler = MinMaxScaler()
-        scaled_data = scaler.fit_transform(data.reshape(-1, 1))
-
-        # 2. Prepare training data
-        X, y = [], []
-        for i in range(lookback - 10):
-            X.append(scaled_data[i:i+10])
-            y.append(scaled_data[i+10])
-        X, y = np.array(X), np.array(y)
-
-        # 3. Train LSTM (for demo, quick train; in production, load a pre-trained model)
-        model = build_lstm_model((X.shape[1], 1))
-        model.fit(X, y, epochs=10, batch_size=8, verbose=0)
-
-        # 4. Predict next N days
-        last_seq = scaled_data[-10:]
-        preds = []
-        for _ in range(days):
-            pred = model.predict(last_seq.reshape(1, 10, 1), verbose=0)
-            preds.append(pred[0, 0])
-            last_seq = np.append(last_seq[1:], pred, axis=0)
-        preds = scaler.inverse_transform(np.array(preds).reshape(-1, 1)).flatten().round(2).tolist()
-
-        return jsonify({'ticker': ticker, 'predictions': preds, 'last_price': float(data[-1])})
-else:
-    @app.route('/predict', methods=['GET'])
-    def predict():
+@app.route('/predict', methods=['GET'])
+def predict():
+    """Simple price prediction using current data"""
+    ticker = request.args.get('ticker', 'AAPL')
+    days = int(request.args.get('days', 7))
+    
+    try:
+        # Get current price
+        current_price = price_data.get(ticker, MOCK_PRICES.get(ticker, {}).get("current", 100.0))
+        
+        # Generate simple predictions based on current price with small variations
+        predictions = []
+        for i in range(days):
+            # Small random variation (-2% to +2% per day)
+            daily_change = random.uniform(-0.02, 0.02)
+            predicted_price = current_price * (1 + daily_change)
+            predictions.append(round(predicted_price, 2))
+            current_price = predicted_price  # Use this as base for next day
+        
+        # Generate dates for predictions
+        from datetime import datetime, timedelta
+        dates = []
+        for i in range(days):
+            date = datetime.now() + timedelta(days=i+1)
+            dates.append(date.strftime("%Y-%m-%d"))
+        
         return jsonify({
-            "error": "Price predictions are currently unavailable. TensorFlow is not installed.",
-            "disclaimer": "Please install TensorFlow to enable price predictions."
-        }), 503
+            'ticker': ticker,
+            'predictions': predictions,
+            'dates': dates,
+            'last_price': price_data.get(ticker, MOCK_PRICES.get(ticker, {}).get("current", 100.0)),
+            'disclaimer': 'These are simulated predictions for demonstration purposes only.'
+        })
+        
+    except Exception as e:
+        logging.error(f"Error generating predictions: {e}")
+        return jsonify({
+            "error": "Failed to generate predictions",
+            "disclaimer": "Please try again later."
+        }), 500
 
 # WebSocket event handlers
 @socketio.on('connect')
@@ -979,4 +967,4 @@ if __name__ == "__main__":
     socketio.start_background_task(fetch_initial_data)
     socketio.start_background_task(update_prices)
     port = int(os.environ.get('PORT', 5000))
-    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
+    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True, use_reloader=False)
