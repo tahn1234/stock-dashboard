@@ -343,47 +343,42 @@ def fetch_previous_close(ticker):
         return None
 
 def fetch_initial_data():
-    """Fetch initial data for all tickers"""
-    logging.info("Fetching initial data for all tickers...")
-    
+    """Fetch initial data for all tickers using Finnhub only"""
+    logging.info("Fetching initial data for all tickers using Finnhub...")
     for ticker in TICKERS:
         try:
-            price, source = fetch_real_price_with_fallback(ticker)
-            previous_close = fetch_previous_close(ticker)
-            
+            price = fetch_finnhub_price(ticker)
+            if price is None:
+                price = generate_mock_price(ticker)
+            previous_close = price  # Finnhub free API does not provide previous close directly
             with lock:
                 price_data[ticker] = price
-                
-                # Use actual previous close if available, otherwise use current price
-                if previous_close is not None:
-                    stats_data[ticker]["previousClose"] = previous_close
-                else:
-                    stats_data[ticker]["previousClose"] = price
-                
                 # Create realistic high/low/open values around the current price
                 price_variation = price * 0.02  # 2% variation
-                stats_data[ticker]["high"] = price + price_variation
-                stats_data[ticker]["low"] = price - price_variation
-                stats_data[ticker]["open"] = price - (price_variation * 0.5)  # Open slightly below current
-                stats_data[ticker]["volume"] = random.randint(1000000, 5000000)
-            
-            logging.info(f"Initialized {ticker}: ${price} (source: {source}), previous close: ${stats_data[ticker]['previousClose']}")
-            time.sleep(0.5)  # Small delay to avoid overwhelming the API
-            
+                stats_data[ticker] = {
+                    "high": price + price_variation,
+                    "low": price - price_variation,
+                    "open": price - (price_variation * 0.5),
+                    "previousClose": previous_close,
+                    "volume": random.randint(1000000, 5000000)
+                }
+            logging.info(f"Initialized {ticker}: ${price}")
+            time.sleep(0.2)  # Small delay to avoid hitting Finnhub rate limits
         except Exception as e:
-            logging.error(f"Error initializing {ticker}: {e}")
+            logging.error(f"Error initializing {ticker} with Finnhub: {e}")
             # Use mock data as final fallback
             mock_price = generate_mock_price(ticker)
             with lock:
                 price_data[ticker] = mock_price
-                
-                # Create realistic high/low/open values around the current price
-                price_variation = mock_price * 0.02  # 2% variation
-                stats_data[ticker]["high"] = mock_price + price_variation
-                stats_data[ticker]["low"] = mock_price - price_variation
-                stats_data[ticker]["open"] = mock_price - (price_variation * 0.5)  # Open slightly below current
-                stats_data[ticker]["previousClose"] = mock_price
-                stats_data[ticker]["volume"] = random.randint(1000000, 5000000)
+                price_variation = mock_price * 0.02
+                stats_data[ticker] = {
+                    "high": mock_price + price_variation,
+                    "low": mock_price - price_variation,
+                    "open": mock_price - (price_variation * 0.5),
+                    "previousClose": mock_price,
+                    "volume": random.randint(1000000, 5000000)
+                }
+            logging.info(f"Initialized {ticker} with mock data: ${mock_price}")
 
 def update_prices():
     """Update prices - now primarily handled by WebSocket, with yfinance fallback."""
