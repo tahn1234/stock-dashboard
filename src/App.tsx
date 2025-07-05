@@ -118,7 +118,8 @@ function App() {
 
   // Backend server URL - use environment variable or fallback to localhost
   const SERVER_URLS = [
-    import.meta.env.VITE_API_URL || 'http://localhost:5002',
+    import.meta.env.VITE_API_URL || 'https://stock-dashboard-production-4484.up.railway.app',
+    'https://stock-dashboard-production-4484.up.railway.app',
     'http://localhost:5002',
     'http://127.0.0.1:5002'
   ];
