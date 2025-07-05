@@ -165,7 +165,10 @@ function App() {
   useEffect(() => {
     if (isAuthenticated) {
       setConnectionStatus('connecting');
-      const newSocket = io(currentServerUrl);
+      const newSocket = io(currentServerUrl, {
+        transports: ["websocket", "polling"],
+        withCredentials: true
+      });
       
       newSocket.on('connect', () => {
         console.log('Connected to WebSocket server');

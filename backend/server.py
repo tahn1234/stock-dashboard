@@ -76,11 +76,17 @@ CORS(app,
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
 # Initialize SocketIO with proper configuration
-socketio = SocketIO(app, 
-                   cors_allowed_origins=allowed_origins, 
-                   async_mode='threading',
-                   logger=False,
-                   engineio_logger=False)
+socketio = SocketIO(app,
+    cors_allowed_origins=[
+        "https://stock-dashboard-ivory.vercel.app",
+        "https://stock-dashboard-ftmgk6ywl-tahn1234s-projects.vercel.app",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173"
+    ],
+    async_mode="threading",
+    logger=False,
+    engineio_logger=False
+)
 
 # Initialize database and services
 db = DatabaseManager()
