@@ -1,0 +1,23 @@
+# Frontend files
+src/
+public/
+index.html
+vite.config.ts
+tsconfig.*
+tailwind.config.js
+postcss.config.js
+eslint.config.js
+package.json
+package-lock.json
+node_modules/
+
+# Deployment files
+vercel.json
+DEPLOYMENT.md
+QUICK_DEPLOY.md
+deploy.sh
+
+# Other files
+.gitignore
+*.log
+.DS_Store 
