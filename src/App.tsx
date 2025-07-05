@@ -116,14 +116,9 @@ function App() {
   const [showChatbot, setShowChatbot] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Backend server URL - prioritize Railway URL for production
-  const SERVER_URLS = [
-    import.meta.env.VITE_API_URL, // Railway URL from environment variable
-    'https://your-railway-app-url.railway.app', // Replace with your actual Railway URL
-    'http://localhost:5002', // Fallback for local development
-    'http://127.0.0.1:5002'  // Additional fallback
-  ].filter(Boolean); // Remove any undefined URLs
-  const [currentServerUrl, setCurrentServerUrl] = useState(SERVER_URLS[0] || 'http://localhost:5002');
+  // Backend server URL - use environment variable for production
+  const backendURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5002';
+  const [currentServerUrl, setCurrentServerUrl] = useState(backendURL);
 
   const autoInterval: Record<string, string> = {
     "1d": "1m",
@@ -156,17 +151,15 @@ function App() {
 
   // Find working server URL
   const findWorkingServer = useCallback(async () => {
-    for (const url of SERVER_URLS) {
-      const isWorking = await testServerConnection(url);
-      if (isWorking) {
-        setCurrentServerUrl(url);
-        console.log(`Using server at: ${url}`);
-        return url;
-      }
+    const isWorking = await testServerConnection(backendURL);
+    if (isWorking) {
+      setCurrentServerUrl(backendURL);
+      console.log(`Using server at: ${backendURL}`);
+      return backendURL;
     }
     console.error('No working server found');
     return null;
-  }, [testServerConnection]);
+  }, [testServerConnection, backendURL]);
 
   // Initialize WebSocket connection
   useEffect(() => {
