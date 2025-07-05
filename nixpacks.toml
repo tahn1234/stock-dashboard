@@ -8,4 +8,4 @@ cmds = ["pip install --break-system-packages -r requirements.txt"]
 cmds = ["echo 'Build complete'"]
 
 [start]
-cmd = "gunicorn --bind 0.0.0.0:$PORT app:app" 
+cmd = "python app.py" 
