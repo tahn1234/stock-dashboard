@@ -38,11 +38,41 @@ class NewsService:
                             'url': article.get('url', ''),
                             'publishedAt': article.get('publishedAt', ''),
                             'source': article.get('source', {}).get('name', ''),
-                            'sentiment': self._analyze_sentiment(article.get('title', '') + ' ' + article.get('description', ''))
+                            'sentiment': self._analyze_sentiment(article.get('title', '') + ' ' + article.get('description', '')),
+                            'sentiment_score': self._calculate_sentiment_score(article.get('title', '') + ' ' + article.get('description', '')),
+                            'sentiment_label': self._analyze_sentiment(article.get('title', '') + ' ' + article.get('description', ''))
                         })
                     return formatted_articles
             
-            # Fallback to mock data
+            # Try Finnhub news as fallback
+            if self.finnhub_key:
+                url = f"https://finnhub.io/api/v1/company-news"
+                params = {
+                    'symbol': ticker,
+                    'from': (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d'),
+                    'to': datetime.now().strftime('%Y-%m-%d'),
+                    'token': self.finnhub_key
+                }
+                
+                response = requests.get(url, params=params, timeout=10)
+                if response.status_code == 200:
+                    articles = response.json()
+                    formatted_articles = []
+                    for article in articles[:10]:
+                        formatted_articles.append({
+                            'title': article.get('headline', ''),
+                            'description': article.get('summary', ''),
+                            'url': article.get('url', ''),
+                            'publishedAt': article.get('datetime', ''),
+                            'source': article.get('source', ''),
+                            'sentiment': self._analyze_sentiment(article.get('headline', '') + ' ' + article.get('summary', '')),
+                            'sentiment_score': self._calculate_sentiment_score(article.get('headline', '') + ' ' + article.get('summary', '')),
+                            'sentiment_label': self._analyze_sentiment(article.get('headline', '') + ' ' + article.get('summary', ''))
+                        })
+                    return formatted_articles
+            
+            # Fallback to mock data if no APIs work
+            logging.warning(f"No API keys configured for news. Using mock data for {ticker}")
             return self._get_mock_news(ticker)
             
         except Exception as e:
@@ -52,8 +82,8 @@ class NewsService:
     def _analyze_sentiment(self, text: str) -> str:
         """Simple sentiment analysis"""
         text_lower = text.lower()
-        positive_words = ['up', 'rise', 'gain', 'positive', 'bullish', 'growth', 'profit']
-        negative_words = ['down', 'fall', 'drop', 'negative', 'bearish', 'loss', 'decline']
+        positive_words = ['up', 'rise', 'gain', 'positive', 'bullish', 'growth', 'profit', 'strong', 'beat', 'exceed']
+        negative_words = ['down', 'fall', 'drop', 'negative', 'bearish', 'loss', 'decline', 'weak', 'miss', 'below']
         
         positive_count = sum(1 for word in positive_words if word in text_lower)
         negative_count = sum(1 for word in negative_words if word in text_lower)
@@ -64,6 +94,22 @@ class NewsService:
             return 'negative'
         else:
             return 'neutral'
+    
+    def _calculate_sentiment_score(self, text: str) -> float:
+        """Calculate sentiment score between -1 and 1"""
+        text_lower = text.lower()
+        positive_words = ['up', 'rise', 'gain', 'positive', 'bullish', 'growth', 'profit', 'strong', 'beat', 'exceed']
+        negative_words = ['down', 'fall', 'drop', 'negative', 'bearish', 'loss', 'decline', 'weak', 'miss', 'below']
+        
+        positive_count = sum(1 for word in positive_words if word in text_lower)
+        negative_count = sum(1 for word in negative_words if word in text_lower)
+        
+        total_words = len(text.split())
+        if total_words == 0:
+            return 0.0
+        
+        score = (positive_count - negative_count) / total_words
+        return max(-1.0, min(1.0, score * 10))  # Scale and clamp to -1 to 1
     
     def _get_mock_news(self, ticker: str) -> List[Dict[str, Any]]:
         """Return mock news data"""
