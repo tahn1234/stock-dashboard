@@ -428,13 +428,7 @@ socketio.start_background_task(update_prices)
 # Add health check endpoint
 @app.route("/health")
 def health_check():
-    return jsonify({
-        "status": "healthy", 
-        "timestamp": datetime.now().isoformat(),
-        "tickers": list(price_data.keys()),
-        "websocket_connected": websocket_feed.get_connection_status() if websocket_feed else False,
-        "market_hours": is_market_hours()
-    }), 200
+    return jsonify({"status": "healthy"}), 200
 
 # Authentication routes
 @app.route("/api/login", methods=["POST", "OPTIONS"])
@@ -974,11 +968,8 @@ def handle_unsubscribe(data):
         leave_room(ticker)
 
 if __name__ == "__main__":
-    port = int(os.environ.get('PORT', 5002))
-    logging.info(f"Starting Flask server on port {port}")
-    logging.info("Server will be accessible at:")
-    logging.info(f"  - http://127.0.0.1:{port}")
-    logging.info(f"  - http://localhost:{port}")
-    logging.info(f"Initialized with tickers: {TICKERS}")
-    logging.info(f"Current prices: {price_data}")
+    # Start slow tasks in the background so startup is fast
+    socketio.start_background_task(fetch_initial_data)
+    socketio.start_background_task(update_prices)
+    port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
