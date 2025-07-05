@@ -2,10 +2,10 @@
 nixPkgs = ["python3", "python3Packages.pip"]
 
 [phases.install]
-cmds = ["pip install --break-system-packages -r backend/requirements.txt"]
+cmds = ["pip install --break-system-packages -r backend/requirements_simple.txt"]
 
 [phases.build]
 cmds = ["echo 'Build complete'"]
 
 [start]
-cmd = "cd backend && python server.py" 
+cmd = "cd backend && python server_simple.py" 
