@@ -61,6 +61,7 @@ allowed_origins = [
     "https://localhost:5173", 
     "http://localhost:3000", 
     "http://127.0.0.1:3000",
+    "https://stock-dashboard-ivory.vercel.app",  # Your specific Vercel URL
     "https://*.vercel.app",  # Allow Vercel deployments
     "https://*.railway.app",  # Allow Railway deployments
     "https://*.netlify.app",  # Allow Netlify deployments
