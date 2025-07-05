@@ -116,13 +116,14 @@ function App() {
   const [showChatbot, setShowChatbot] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Backend server URL - use environment variable or fallback to localhost
+  // Backend server URL - prioritize Railway URL for production
   const SERVER_URLS = [
-    import.meta.env.VITE_API_URL || 'http://localhost:5002',
-    'http://localhost:5002',
-    'http://127.0.0.1:5002'
-  ];
-  const [currentServerUrl, setCurrentServerUrl] = useState(SERVER_URLS[0]);
+    import.meta.env.VITE_API_URL, // Railway URL from environment variable
+    'https://your-railway-app-url.railway.app', // Replace with your actual Railway URL
+    'http://localhost:5002', // Fallback for local development
+    'http://127.0.0.1:5002'  // Additional fallback
+  ].filter(Boolean); // Remove any undefined URLs
+  const [currentServerUrl, setCurrentServerUrl] = useState(SERVER_URLS[0] || 'http://localhost:5002');
 
   const autoInterval: Record<string, string> = {
     "1d": "1m",

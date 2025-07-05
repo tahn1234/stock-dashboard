@@ -55,16 +55,28 @@ logging.basicConfig(
 
 app = Flask(__name__)
 
-# Enhanced CORS configuration
+# Enhanced CORS configuration - allow all origins for production
+allowed_origins = [
+    "http://localhost:5173", 
+    "http://127.0.0.1:5173", 
+    "https://localhost:5173", 
+    "http://localhost:3000", 
+    "http://127.0.0.1:3000",
+    "https://*.vercel.app",  # Allow Vercel deployments
+    "https://*.railway.app",  # Allow Railway deployments
+    "https://*.netlify.app",  # Allow Netlify deployments
+    "*"  # Allow all origins in production (you can restrict this later)
+]
+
 CORS(app, 
-     resources={r"/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173", "https://localhost:5173", "http://localhost:3000", "http://127.0.0.1:3000"]}},
+     resources={r"/*": {"origins": allowed_origins}},
      supports_credentials=True,
      allow_headers=["Content-Type", "Authorization"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
 # Initialize SocketIO with proper configuration
 socketio = SocketIO(app, 
-                   cors_allowed_origins=["http://localhost:5173", "http://127.0.0.1:5173", "https://localhost:5173", "http://localhost:3000", "http://127.0.0.1:3000"], 
+                   cors_allowed_origins=allowed_origins, 
                    async_mode='threading',
                    logger=False,
                    engineio_logger=False)
