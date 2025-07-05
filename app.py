@@ -1,5 +1,6 @@
 import os
 import logging
+import random
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from datetime import datetime
@@ -76,8 +77,7 @@ def get_history(ticker):
         return jsonify({"error": "Ticker not found"}), 404
     
     # Generate mock historical data
-    import random
-    from datetime import datetime, timedelta
+    from datetime import timedelta
     
     data = []
     base_price = price_data.get(ticker, 100.0)
