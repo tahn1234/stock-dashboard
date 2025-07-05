@@ -423,7 +423,7 @@ fetch_initial_data()
 
 # Start price update thread
 socketio.start_background_task(update_prices)
-# socketio.start_background_task(simulate_price_changes)  # Disabled to keep prices stable
+socketio.start_background_task(simulate_price_changes)  # Enable for real-time updates
 
 # Add health check endpoint
 @app.route("/health")

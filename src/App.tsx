@@ -186,13 +186,19 @@ function App() {
 
       newSocket.on('price_update', (data: any) => {
         console.log("📡 Received price update:", data);
-        setPrices(prevPrices => ({
-          ...prevPrices,
-          ...data
-        }));
+        console.log("Previous prices:", prices);
+        setPrices(prevPrices => {
+          const newPrices = {
+            ...prevPrices,
+            ...data
+          };
+          console.log("New prices:", newPrices);
+          return newPrices;
+        });
       });
 
       newSocket.on('stats_update', (data: any) => {
+        console.log("📊 Received stats update:", data);
         setStats(data);
       });
 
