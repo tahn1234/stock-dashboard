@@ -8,4 +8,4 @@ cmds = ["pip install --break-system-packages -r backend/requirements_minimal.txt
 cmds = ["echo 'Build complete'"]
 
 [start]
-cmd = "cd backend && python app.py" 
+cmd = "cd backend && gunicorn --bind 0.0.0.0:$PORT wsgi:app" 
