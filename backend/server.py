@@ -523,11 +523,82 @@ def home():
         "current_prices": price_data
     })
 
+FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')
+FINNHUB_BASE_URL = 'https://finnhub.io/api/v1'
+
+def fetch_finnhub_price(ticker):
+    try:
+        url = f"{FINNHUB_BASE_URL}/quote"
+        params = {"symbol": ticker, "token": FINNHUB_API_KEY}
+        resp = requests.get(url, params=params, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            price = data.get('c')
+            if price is not None:
+                return float(price)
+    except Exception as e:
+        logging.warning(f"Finnhub price fetch failed for {ticker}: {e}")
+    return None
+
+def fetch_finnhub_history(ticker, period, interval):
+    # Map your period/interval to Finnhub's supported resolution and time range
+    import time as _time
+    now = int(_time.time())
+    period_map = {
+        "1d": 1*24*60*60,
+        "5d": 5*24*60*60,
+        "1mo": 30*24*60*60,
+        "3mo": 90*24*60*60,
+        "6mo": 180*24*60*60,
+        "1y": 365*24*60*60,
+        "2y": 2*365*24*60*60,
+        "5y": 5*365*24*60*60,
+        "10y": 10*365*24*60*60,
+        "ytd": 365*24*60*60,
+        "max": 10*365*24*60*60
+    }
+    interval_map = {
+        "1m": "1", "2m": "1", "5m": "5", "15m": "15", "30m": "30", "60m": "60", "90m": "60", "1h": "60",
+        "1d": "D", "5d": "D", "1wk": "W", "1mo": "M", "3mo": "M"
+    }
+    resolution = interval_map.get(interval, "5")
+    from_ = now - period_map.get(period, 30*24*60*60)
+    to_ = now
+    try:
+        url = f"{FINNHUB_BASE_URL}/stock/candle"
+        params = {"symbol": ticker, "resolution": resolution, "from": from_, "to": to_, "token": FINNHUB_API_KEY}
+        resp = requests.get(url, params=params, timeout=8)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('s') == 'ok':
+                candles = []
+                for i in range(len(data['c'])):
+                    candles.append({
+                        "time": datetime.utcfromtimestamp(data['t'][i]).strftime("%Y-%m-%d %H:%M"),
+                        "price": data['c'][i],
+                        "volume": data['v'][i],
+                        "open": data['o'][i],
+                        "high": data['h'][i],
+                        "low": data['l'][i],
+                        "close": data['c'][i],
+                    })
+                return candles
+    except Exception as e:
+        logging.warning(f"Finnhub history fetch failed for {ticker}: {e}")
+    return None
+
 @app.route("/api/prices")
 @jwt_required()
 def get_prices():
-    with lock:
-        return jsonify(price_data)
+    result = {}
+    for ticker in TICKERS:
+        price = fetch_finnhub_price(ticker)
+        if price is not None:
+            result[ticker] = price
+        else:
+            # fallback to mock
+            result[ticker] = price_data.get(ticker, MOCK_PRICES.get(ticker, {}).get("current", 100.0))
+    return jsonify(result)
 
 @app.route("/api/stats")
 @jwt_required()
@@ -1027,95 +1098,17 @@ def generate_recommendation_reason(ticker, score, rec_type):
 def get_history(ticker):
     period = request.args.get("period", "1d")
     interval = request.args.get("interval", "1m")
-    
-    # Validate inputs
     if period not in VALID_PERIODS:
         return jsonify({"error": f"Invalid period. Must be one of: {VALID_PERIODS}"}), 400
     if interval not in VALID_INTERVALS:
         return jsonify({"error": f"Invalid interval. Must be one of: {VALID_INTERVALS}"}), 400
-    
-    # Auto-adjust interval for longer periods to improve data availability
-    period_interval_map = {
-        "1d": ["1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h"],
-        "5d": ["5m", "15m", "30m", "60m", "90m", "1h"],
-        "1mo": ["15m", "30m", "60m", "90m", "1h", "1d"],
-        "3mo": ["1h", "1d"],
-        "6mo": ["1d"],
-        "1y": ["1d"],
-        "2y": ["1d"],
-        "5y": ["1d"],
-        "10y": ["1d"],
-        "ytd": ["1d"],
-        "max": ["1d"]
-    }
-    
-    # Try the requested interval first, then fall back to appropriate intervals for the period
-    intervals_to_try = [interval] + [i for i in period_interval_map.get(period, ["1d"]) if i != interval]
-    
-    try:
-        # Check cache first
-        cache_key = f"{ticker}_{period}_{interval}"
-        if cache_key in history_cache:
-            cache_time, data = history_cache[cache_key]
-            if (datetime.now() - cache_time).total_seconds() < CACHE_DURATION:
-                logging.debug(f"Returning cached data for {cache_key}")
-                return jsonify(data)
-        
-        # Try different intervals until we get data
-        for attempt_interval in intervals_to_try:
-            try:
-                stock = yf.Ticker(ticker)
-                hist = stock.history(period=period, interval=attempt_interval)
-                
-                if not hist.empty and "Close" in hist.columns:
-                    hist = hist.reset_index()
-                    
-                    # Handle different index column names
-                    time_col = None
-                    for col in ['Datetime', 'Date', 'index']:
-                        if col in hist.columns:
-                            time_col = col
-                            break
-                    
-                    if time_col is None:
-                        logging.error(f"No time column found in history data for {ticker}")
-                        continue
-                    
-                    hist["time"] = hist[time_col].dt.strftime("%Y-%m-%d %H:%M")
-
-                    data = []
-                    for _, row in hist.iterrows():
-                        if pd.isna(row["Close"]):
-                            continue
-                        data.append({
-                            "time": row["time"],
-                            "price": float(row["Close"]),
-                            "volume": int(row["Volume"]) if not pd.isna(row["Volume"]) else None,
-                            "open": float(row["Open"]) if not pd.isna(row["Open"]) else None,
-                            "high": float(row["High"]) if not pd.isna(row["High"]) else None,
-                            "low": float(row["Low"]) if not pd.isna(row["Low"]) else None,
-                            "close": float(row["Close"]),
-                        })
-                    
-                    if data:  # Only cache and return if we have data
-                        # Cache the data
-                        history_cache[cache_key] = (datetime.now(), data)
-                        logging.info(f"Successfully fetched {len(data)} data points for {ticker} with period={period}, interval={attempt_interval}")
-                        return jsonify(data)
-                    
-            except Exception as e:
-                logging.debug(f"Failed to fetch data for {ticker} with period={period}, interval={attempt_interval}: {e}")
-                continue
-        
-        # If all intervals failed, generate fallback data
-        logging.warning(f"All data sources failed for {ticker} with period={period}, using fallback data")
-        current_price = price_data.get(ticker, MOCK_PRICES.get(ticker, {}).get("current", 100.0))
-        fallback_data = generate_fallback_historical_data(ticker, period, interval, current_price)
-        return fallback_data
-
-    except Exception as e:
-        logging.error(f"/api/history failed for {ticker}: {e}")
-        return jsonify({"error": f"Failed to fetch historical data: {str(e)}"}), 500
+    # Try Finnhub first
+    candles = fetch_finnhub_history(ticker, period, interval)
+    if candles:
+        return jsonify(candles)
+    # fallback to old logic
+    current_price = price_data.get(ticker, MOCK_PRICES.get(ticker, {}).get("current", 100.0))
+    return generate_fallback_historical_data(ticker, period, interval, current_price)
 
 def generate_fallback_historical_data(ticker, period, interval, current_price):
     """Generate historical data using current real-time price as base"""
