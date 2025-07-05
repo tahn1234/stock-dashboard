@@ -255,6 +255,70 @@ def is_market_hours():
     
     return True
 
+FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')
+FINNHUB_BASE_URL = 'https://finnhub.io/api/v1'
+
+def fetch_finnhub_price(ticker):
+    try:
+        url = f"{FINNHUB_BASE_URL}/quote"
+        params = {"symbol": ticker, "token": FINNHUB_API_KEY}
+        resp = requests.get(url, params=params, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            price = data.get('c')
+            if price is not None:
+                return float(price)
+    except Exception as e:
+        logging.warning(f"Finnhub price fetch failed for {ticker}: {e}")
+    return None
+
+def fetch_finnhub_history(ticker, period, interval):
+    # Map your period/interval to Finnhub's supported resolution and time range
+    import time as _time
+    now = int(_time.time())
+    period_map = {
+        "1d": 1*24*60*60,
+        "5d": 5*24*60*60,
+        "1mo": 30*24*60*60,
+        "3mo": 90*24*60*60,
+        "6mo": 180*24*60*60,
+        "1y": 365*24*60*60,
+        "2y": 2*365*24*60*60,
+        "5y": 5*365*24*60*60,
+        "10y": 10*365*24*60*60,
+        "ytd": 365*24*60*60,
+        "max": 10*365*24*60*60
+    }
+    interval_map = {
+        "1m": "1", "2m": "1", "5m": "5", "15m": "15", "30m": "30", "60m": "60", "90m": "60", "1h": "60",
+        "1d": "D", "5d": "D", "1wk": "W", "1mo": "M", "3mo": "M"
+    }
+    resolution = interval_map.get(interval, "5")
+    from_ = now - period_map.get(period, 30*24*60*60)
+    to_ = now
+    try:
+        url = f"{FINNHUB_BASE_URL}/stock/candle"
+        params = {"symbol": ticker, "resolution": resolution, "from": from_, "to": to_, "token": FINNHUB_API_KEY}
+        resp = requests.get(url, params=params, timeout=8)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('s') == 'ok':
+                candles = []
+                for i in range(len(data['c'])):
+                    candles.append({
+                        "time": datetime.utcfromtimestamp(data['t'][i]).strftime("%Y-%m-%d %H:%M"),
+                        "price": data['c'][i],
+                        "volume": data['v'][i],
+                        "open": data['o'][i],
+                        "high": data['h'][i],
+                        "low": data['l'][i],
+                        "close": data['c'][i],
+                    })
+                return candles
+    except Exception as e:
+        logging.warning(f"Finnhub history fetch failed for {ticker}: {e}")
+    return None
+
 def fetch_initial_data():
     """Fetch initial data for all tickers using Finnhub only"""
     logging.info("Fetching initial data for all tickers using Finnhub...")
@@ -294,50 +358,34 @@ def fetch_initial_data():
             logging.info(f"Initialized {ticker} with mock data: ${mock_price}")
 
 def update_prices():
-    """Update prices - now primarily handled by WebSocket, with yfinance fallback."""
+    """Update prices using Finnhub only, fallback to mock data if Finnhub fails."""
     while True:
         try:
-            # If WebSocket is not available, fall back to yfinance
-            if not websocket_feed or not websocket_feed.get_connection_status():
-                logging.debug("WebSocket not available, using yfinance fallback")
-                
-                with lock:
-                    for ticker in TICKERS:
-                        try:
-                            price, source = fetch_real_price_with_fallback(ticker)
-                            
-                            if price is not None:
-                                old_price = price_data.get(ticker, price)
-                                # Update current price but keep previous close as yesterday's close
-                                price_data[ticker] = price
-                                stats_data[ticker]["high"] = max(stats_data[ticker]["high"], price)
-                                stats_data[ticker]["low"] = min(stats_data[ticker]["low"], price)
-                                
-                                # Check alerts
-                                alert_service.check_alerts(price_data)
-                                
-                                # Emit price update
-                                socketio.emit('price_update', {ticker: price}, room=ticker)
-                                
-                                if abs(price - old_price) > 0.01:  # Only log significant changes
-                                    logging.debug(f"Price update for {ticker}: ${price} (source: {source})")
-                                    
-                        except Exception as e:
-                            logging.error(f"Error updating price for {ticker}: {e}")
-                    
-                    # Emit all prices and stats
-                    socketio.emit('price_update', price_data)
-                    socketio.emit('stats_update', stats_data)
-            else:
-                # WebSocket is handling updates, just log status
-                logging.debug("WebSocket is active, no need for manual updates")
-                
+            with lock:
+                for ticker in TICKERS:
+                    try:
+                        price = fetch_finnhub_price(ticker)
+                        if price is None:
+                            price = generate_mock_price(ticker)
+                        old_price = price_data.get(ticker, price)
+                        price_data[ticker] = price
+                        stats_data[ticker]["high"] = max(stats_data[ticker]["high"], price)
+                        stats_data[ticker]["low"] = min(stats_data[ticker]["low"], price)
+                        # Check alerts
+                        alert_service.check_alerts(price_data)
+                        # Emit price update
+                        socketio.emit('price_update', {ticker: price}, room=ticker)
+                        if abs(price - old_price) > 0.01:
+                            logging.debug(f"Price update for {ticker}: ${price}")
+                    except Exception as e:
+                        logging.error(f"Error updating price for {ticker}: {e}")
+                # Emit all prices and stats
+                socketio.emit('price_update', price_data)
+                socketio.emit('stats_update', stats_data)
+            time.sleep(10)  # Update every 10 seconds
         except Exception as e:
-            logging.error(f"Error in update_prices: {e}")
-        
-        # Update every 30 seconds when using fallback, every 2 minutes when WebSocket is active
-        sleep_time = 30 if not websocket_feed or not websocket_feed.get_connection_status() else 120
-        time.sleep(sleep_time)
+            logging.error(f"Error in update_prices loop: {e}")
+            time.sleep(10)
 
 def simulate_price_changes():
     """Simulate small price changes to make the UI more dynamic"""
@@ -430,70 +478,6 @@ def home():
         "tickers": list(price_data.keys()),
         "current_prices": price_data
     })
-
-FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')
-FINNHUB_BASE_URL = 'https://finnhub.io/api/v1'
-
-def fetch_finnhub_price(ticker):
-    try:
-        url = f"{FINNHUB_BASE_URL}/quote"
-        params = {"symbol": ticker, "token": FINNHUB_API_KEY}
-        resp = requests.get(url, params=params, timeout=5)
-        if resp.status_code == 200:
-            data = resp.json()
-            price = data.get('c')
-            if price is not None:
-                return float(price)
-    except Exception as e:
-        logging.warning(f"Finnhub price fetch failed for {ticker}: {e}")
-    return None
-
-def fetch_finnhub_history(ticker, period, interval):
-    # Map your period/interval to Finnhub's supported resolution and time range
-    import time as _time
-    now = int(_time.time())
-    period_map = {
-        "1d": 1*24*60*60,
-        "5d": 5*24*60*60,
-        "1mo": 30*24*60*60,
-        "3mo": 90*24*60*60,
-        "6mo": 180*24*60*60,
-        "1y": 365*24*60*60,
-        "2y": 2*365*24*60*60,
-        "5y": 5*365*24*60*60,
-        "10y": 10*365*24*60*60,
-        "ytd": 365*24*60*60,
-        "max": 10*365*24*60*60
-    }
-    interval_map = {
-        "1m": "1", "2m": "1", "5m": "5", "15m": "15", "30m": "30", "60m": "60", "90m": "60", "1h": "60",
-        "1d": "D", "5d": "D", "1wk": "W", "1mo": "M", "3mo": "M"
-    }
-    resolution = interval_map.get(interval, "5")
-    from_ = now - period_map.get(period, 30*24*60*60)
-    to_ = now
-    try:
-        url = f"{FINNHUB_BASE_URL}/stock/candle"
-        params = {"symbol": ticker, "resolution": resolution, "from": from_, "to": to_, "token": FINNHUB_API_KEY}
-        resp = requests.get(url, params=params, timeout=8)
-        if resp.status_code == 200:
-            data = resp.json()
-            if data.get('s') == 'ok':
-                candles = []
-                for i in range(len(data['c'])):
-                    candles.append({
-                        "time": datetime.utcfromtimestamp(data['t'][i]).strftime("%Y-%m-%d %H:%M"),
-                        "price": data['c'][i],
-                        "volume": data['v'][i],
-                        "open": data['o'][i],
-                        "high": data['h'][i],
-                        "low": data['l'][i],
-                        "close": data['c'][i],
-                    })
-                return candles
-    except Exception as e:
-        logging.warning(f"Finnhub history fetch failed for {ticker}: {e}")
-    return None
 
 @app.route("/api/prices")
 @jwt_required()
