@@ -2,10 +2,10 @@
 nixPkgs = ["python3", "python3Packages.pip"]
 
 [phases.install]
-cmds = ["pip install --break-system-packages -r backend/requirements_minimal.txt"]
+cmds = ["pip install --break-system-packages -r requirements.txt"]
 
 [phases.build]
 cmds = ["echo 'Build complete'"]
 
 [start]
-cmd = "cd backend && gunicorn --bind 0.0.0.0:$PORT wsgi:app" 
+cmd = "gunicorn --bind 0.0.0.0:$PORT app:app" 
