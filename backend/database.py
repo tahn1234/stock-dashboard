@@ -3,7 +3,6 @@ import json
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import logging
-import yfinance as yf
 
 class DatabaseManager:
     def __init__(self, db_path: str = "stock_dashboard.db"):
@@ -233,5 +232,3 @@ class DatabaseManager:
                 )
         except sqlite3.IntegrityError:
             pass  # Already exists
-
-print(yf.Ticker("AAPL").history(period="1d"))

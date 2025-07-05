@@ -2,7 +2,6 @@ Flask==2.3.3
 Flask-CORS==4.0.0
 Flask-SocketIO==5.3.6
 Flask-JWT-Extended==4.5.3
-yfinance==0.2.28
 pandas==2.1.4
 numpy==1.26.2
 python-dotenv==1.0.0

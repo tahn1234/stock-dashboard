@@ -3,7 +3,6 @@ import logging
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from threading import Thread, Lock
-import yfinance as yf
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -255,92 +254,6 @@ def is_market_hours():
         return False
     
     return True
-
-def fetch_real_price_with_fallback(ticker, max_retries=2):
-    """Fetch real price with multiple fallback strategies"""
-    now = time.time()
-    
-    # Check cache first
-    if ticker in price_fetch_cache:
-        cache_time, cached_price = price_fetch_cache[ticker]
-        if now - cache_time < PRICE_CACHE_DURATION:
-            logging.debug(f"Using cached price for {ticker}: {cached_price}")
-            return cached_price, "cached"
-    
-    # Try yfinance with different approaches
-    for attempt in range(max_retries):
-        try:
-            stock = yf.Ticker(ticker)
-            
-            # Method 1: Try fast_info first
-            try:
-                price = float(stock.fast_info["last_price"])
-                if price > 0:
-                    price_fetch_cache[ticker] = (now, price)
-                    logging.info(f"Fetched real price for {ticker}: ${price} (fast_info)")
-                    return price, "real"
-            except Exception as e:
-                logging.debug(f"fast_info failed for {ticker}: {e}")
-            
-            # Method 2: Try info
-            try:
-                info = stock.info
-                price = info.get('regularMarketPrice') or info.get('currentPrice') or info.get('previousClose')
-                if price and price > 0:
-                    price_fetch_cache[ticker] = (now, float(price))
-                    logging.info(f"Fetched real price for {ticker}: ${price} (info)")
-                    return float(price), "real"
-            except Exception as e:
-                logging.debug(f"info failed for {ticker}: {e}")
-            
-            # Method 3: Try recent history
-            try:
-                hist = stock.history(period="1d", interval="1m")
-                if not hist.empty and 'Close' in hist.columns:
-                    price = float(hist['Close'].iloc[-1])
-                    if price > 0:
-                        price_fetch_cache[ticker] = (now, price)
-                        logging.info(f"Fetched real price for {ticker}: ${price} (history)")
-                        return price, "real"
-            except Exception as e:
-                logging.debug(f"history failed for {ticker}: {e}")
-                
-        except Exception as e:
-            logging.warning(f"Attempt {attempt + 1} failed for {ticker}: {e}")
-            if attempt < max_retries - 1:
-                time.sleep(1)  # Brief delay before retry
-    
-    # If all real data methods fail, use mock data
-    mock_price = generate_mock_price(ticker)
-    price_fetch_cache[ticker] = (now, mock_price)
-    logging.info(f"Using mock price for {ticker}: ${mock_price}")
-    return mock_price, "mock"
-
-def fetch_previous_close(ticker):
-    """Fetch the previous day's closing price"""
-    try:
-        stock = yf.Ticker(ticker)
-        
-        # Get 2 days of data to ensure we have previous day
-        hist = stock.history(period="2d", interval="1d")
-        
-        if not hist.empty and len(hist) >= 2:
-            # Get the previous day's closing price (second to last entry)
-            previous_close = float(hist['Close'].iloc[-2])
-            logging.info(f"Fetched previous close for {ticker}: ${previous_close}")
-            return previous_close
-        elif not hist.empty:
-            # If only one day available, use that as previous close
-            previous_close = float(hist['Close'].iloc[-1])
-            logging.info(f"Using current day as previous close for {ticker}: ${previous_close}")
-            return previous_close
-        else:
-            logging.warning(f"No historical data available for {ticker}")
-            return None
-            
-    except Exception as e:
-        logging.error(f"Error fetching previous close for {ticker}: {e}")
-        return None
 
 def fetch_initial_data():
     """Fetch initial data for all tickers using Finnhub only"""
@@ -848,21 +761,8 @@ def generate_recommendations(current_ticker):
             reason = generate_recommendation_reason(ticker, score, rec_type)
             
             # Calculate real price change
-            try:
-                stock = yf.Ticker(ticker)
-                hist = stock.history(period="5d", interval="1d")
-                if not hist.empty and len(hist) >= 2:
-                    current_price = hist['Close'].iloc[-1]
-                    previous_price = hist['Close'].iloc[-2]
-                    change = current_price - previous_price
-                    change_percent = (change / previous_price) * 100
-                else:
-                    change = 0
-                    change_percent = 0
-            except Exception as e:
-                logging.error(f"Error calculating price change for {ticker}: {e}")
-                change = 0
-                change_percent = 0
+            change = 0
+            change_percent = 0
             
             recommendations.append({
                 "ticker": ticker,
@@ -885,208 +785,33 @@ def generate_recommendations(current_ticker):
     return recommendations
 
 def get_similar_stocks(ticker):
-    """Get similar stocks based on sector and market cap using real data"""
-    try:
-        # Get stock info to determine sector
-        stock = yf.Ticker(ticker)
-        info = stock.info
-        
-        # Define sector-based similar stocks
-        sector_stocks = {
-            "Technology": ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA"],
-            "Consumer Cyclical": ["AMZN", "TSLA", "HD", "MCD", "NKE", "SBUX"],
-            "Healthcare": ["JNJ", "PFE", "UNH", "ABBV", "TMO", "DHR"],
-            "Financial Services": ["JPM", "BAC", "WFC", "GS", "MS", "BLK"],
-            "Communication Services": ["GOOGL", "META", "NFLX", "DIS", "CMCSA"],
-            "Industrials": ["CAT", "BA", "GE", "MMM", "HON", "UPS"],
-            "Energy": ["XOM", "CVX", "COP", "EOG", "SLB", "KMI"],
-            "Consumer Defensive": ["PG", "KO", "WMT", "COST", "PEP", "CL"],
-            "Real Estate": ["PLD", "AMT", "CCI", "EQIX", "DLR", "PSA"],
-            "Basic Materials": ["LIN", "APD", "FCX", "NEM", "BLL", "ECL"],
-            "Utilities": ["NEE", "DUK", "SO", "D", "AEP", "XEL"]
-        }
-        
-        # Get sector from stock info
-        sector = info.get('sector', 'Technology')
-        
-        # Get similar stocks from the same sector
-        sector_tickers = sector_stocks.get(sector, sector_stocks["Technology"])
-        
-        # Remove the current ticker if it's in the list
-        if ticker in sector_tickers:
-            sector_tickers.remove(ticker)
-        
-        # Return up to 5 similar stocks
-        return sector_tickers[:5]
-        
-    except Exception as e:
-        logging.error(f"Error getting similar stocks for {ticker}: {e}")
-        # Fallback to technology stocks
-        return ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"]
+    """Get similar stocks based on sector and market cap using mock data only"""
+    # Just return a static list for now
+    sector_stocks = {
+        "Technology": ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA"],
+        "Consumer Cyclical": ["AMZN", "TSLA", "HD", "MCD", "NKE", "SBUX"],
+        "Healthcare": ["JNJ", "PFE", "UNH", "ABBV", "TMO", "DHR"],
+        "Financial Services": ["JPM", "BAC", "WFC", "GS", "MS", "BLK"],
+        "Communication Services": ["GOOGL", "META", "NFLX", "DIS", "CMCSA"],
+        "Industrials": ["CAT", "BA", "GE", "MMM", "HON", "UPS"],
+        "Energy": ["XOM", "CVX", "COP", "EOG", "SLB", "KMI"],
+        "Consumer Defensive": ["PG", "KO", "WMT", "COST", "PEP", "CL"],
+        "Real Estate": ["PLD", "AMT", "CCI", "EQIX", "DLR", "PSA"],
+        "Basic Materials": ["LIN", "APD", "FCX", "NEM", "BLL", "ECL"],
+        "Utilities": ["NEE", "DUK", "SO", "D", "AEP", "XEL"]
+    }
+    # Just return the technology sector for now
+    sector_tickers = sector_stocks["Technology"]
+    if ticker in sector_tickers:
+        sector_tickers = [t for t in sector_tickers if t != ticker]
+    return sector_tickers[:5]
 
 def calculate_recommendation_score(ticker, current_price):
-    """Calculate a recommendation score from 1-10 based on real technical analysis"""
-    score = 5.0  # Start with neutral
-    
-    try:
-        # Get historical data for analysis
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period="30d", interval="1d")
-        
-        if hist.empty or len(hist) < 14:
-            logging.warning(f"Insufficient data for {ticker}")
-            return 5.0
-        
-        # Factor 1: Price momentum (real)
-        if len(hist) >= 2:
-            recent_change = (hist['Close'].iloc[-1] - hist['Close'].iloc[-5]) / hist['Close'].iloc[-5]
-            if recent_change > 0.05:
-                score += 1.5
-            elif recent_change > 0.02:
-                score += 0.5
-            elif recent_change < -0.05:
-                score -= 1.5
-            elif recent_change < -0.02:
-                score -= 0.5
-        
-        # Factor 2: Volume analysis (real)
-        if 'Volume' in hist.columns:
-            avg_volume = hist['Volume'].mean()
-            recent_volume = hist['Volume'].iloc[-5:].mean()
-            volume_ratio = recent_volume / avg_volume if avg_volume > 0 else 1
-            
-            if volume_ratio > 1.2:
-                score += 0.5
-            elif volume_ratio < 0.8:
-                score -= 0.5
-        
-        # Factor 3: RSI calculation (real)
-        rsi = calculate_rsi(hist['Close'].values)
-        if rsi < 30:  # Oversold
-            score += 1.0
-        elif rsi > 70:  # Overbought
-            score -= 1.0
-        
-        # Factor 4: Moving averages (real)
-        sma_20 = hist['Close'].rolling(window=20).mean().iloc[-1]
-        sma_50 = hist['Close'].rolling(window=50).mean().iloc[-1] if len(hist) >= 50 else sma_20
-        
-        if current_price > sma_20 and sma_20 > sma_50:
-            score += 1.0  # Golden cross
-        elif current_price < sma_20 and sma_20 < sma_50:
-            score -= 1.0  # Death cross
-        
-        # Factor 5: Support/Resistance levels
-        high_30d = hist['High'].max()
-        low_30d = hist['Low'].min()
-        price_position = (current_price - low_30d) / (high_30d - low_30d) if (high_30d - low_30d) > 0 else 0.5
-        
-        if price_position > 0.8:
-            score -= 0.5  # Near resistance
-        elif price_position < 0.2:
-            score += 0.5  # Near support
-        
-        # Factor 6: Volatility analysis
-        returns = hist['Close'].pct_change().dropna()
-        volatility = returns.std() * (252 ** 0.5)  # Annualized volatility
-        
-        if volatility > 0.4:  # High volatility
-            score -= 0.5
-        elif volatility < 0.15:  # Low volatility
-            score += 0.5
-        
-    except Exception as e:
-        logging.error(f"Error calculating score for {ticker}: {e}")
-    
-    # Ensure score is between 1 and 10
-    return max(1, min(10, score))
-
-def calculate_rsi(prices, period=14):
-    """Calculate RSI using real price data"""
-    if len(prices) < period + 1:
-        return 50  # Neutral if insufficient data
-    
-    deltas = np.diff(prices)
-    gains = np.where(deltas > 0, deltas, 0)
-    losses = np.where(deltas < 0, -deltas, 0)
-    
-    avg_gains = np.mean(gains[:period])
-    avg_losses = np.mean(losses[:period])
-    
-    if avg_losses == 0:
-        return 100
-    
-    rs = avg_gains / avg_losses
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
+    """Return a neutral score for now (no real analysis)"""
+    return 5.0
 
 def generate_recommendation_reason(ticker, score, rec_type):
-    """Generate a data-driven reason for the recommendation"""
-    try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period="30d", interval="1d")
-        
-        if hist.empty or len(hist) < 14:
-            return "Insufficient data for detailed analysis"
-        
-        current_price = hist['Close'].iloc[-1]
-        price_5d_ago = hist['Close'].iloc[-5] if len(hist) >= 5 else current_price
-        price_change_5d = ((current_price - price_5d_ago) / price_5d_ago) * 100
-        
-        # Calculate technical indicators
-        rsi = calculate_rsi(hist['Close'].values)
-        sma_20 = hist['Close'].rolling(window=20).mean().iloc[-1]
-        sma_50 = hist['Close'].rolling(window=50).mean().iloc[-1] if len(hist) >= 50 else sma_20
-        
-        # Volume analysis
-        avg_volume = hist['Volume'].mean()
-        recent_volume = hist['Volume'].iloc[-5:].mean()
-        volume_ratio = recent_volume / avg_volume if avg_volume > 0 else 1
-        
-        reasons = []
-        
-        if rec_type == 'buy':
-            if price_change_5d > 5:
-                reasons.append(f"Strong 5-day gain of {price_change_5d:.1f}%")
-            if rsi < 40:
-                reasons.append(f"RSI at {rsi:.0f} indicates oversold conditions")
-            if current_price > sma_20:
-                reasons.append("Price above 20-day moving average")
-            if volume_ratio > 1.2:
-                reasons.append("Above-average volume supporting price action")
-            if current_price > sma_50:
-                reasons.append("Price above 50-day moving average")
-                
-        elif rec_type == 'sell':
-            if price_change_5d < -5:
-                reasons.append(f"Declining 5-day performance of {price_change_5d:.1f}%")
-            if rsi > 70:
-                reasons.append(f"RSI at {rsi:.0f} indicates overbought conditions")
-            if current_price < sma_20:
-                reasons.append("Price below 20-day moving average")
-            if volume_ratio < 0.8:
-                reasons.append("Declining volume suggests weakening momentum")
-            if current_price < sma_50:
-                reasons.append("Price below 50-day moving average")
-                
-        else:  # hold
-            if abs(price_change_5d) < 3:
-                reasons.append(f"Stable 5-day performance ({price_change_5d:.1f}%)")
-            if 40 <= rsi <= 60:
-                reasons.append(f"Neutral RSI at {rsi:.0f}")
-            if abs(current_price - sma_20) / sma_20 < 0.02:
-                reasons.append("Price near 20-day moving average")
-            if 0.8 <= volume_ratio <= 1.2:
-                reasons.append("Normal volume patterns")
-        
-        if not reasons:
-            reasons.append("Mixed technical signals")
-            
-        return "; ".join(reasons[:3])  # Limit to top 3 reasons
-        
-    except Exception as e:
-        logging.error(f"Error generating reason for {ticker}: {e}")
-        return "Technical analysis indicates mixed signals"
+    return "No real analysis available in production."
 
 @app.route("/api/history/<ticker>")
 @jwt_required()
