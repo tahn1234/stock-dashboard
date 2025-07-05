@@ -379,7 +379,7 @@ function App() {
       return value.toString();
     };
 
-    return (
+    return ( 
       <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-lg py-6 px-6 border-l-4 mx-auto ${
         absChange < 0 ? 'border-red-500' : 'border-stock-green'
       }`}>
@@ -403,8 +403,8 @@ function App() {
           <div className="text-lg font-medium flex items-center gap-2">
             {formattedChange}
             {absChange > 0 ? <TrendingUp className="w-5 h-5 text-green-500" /> : absChange < 0 ? <TrendingDown className="w-5 h-5 text-red-500" /> : null}
-          </div>
         </div>
+          </div>
         {/* Stats Row below price */}
         <div className="flex flex-row items-center justify-between gap-4 mt-10">
           <div className="flex flex-col items-center">
@@ -442,7 +442,7 @@ function App() {
                   <div className="flex items-center gap-4 text-white">
                     <div className="size-8 md:size-10">
                       <TrendingUp className="w-full h-full text-stock-green" />
-                    </div>
+          </div>
                     <h2 className="text-white text-lg md:text-xl font-bold leading-tight tracking-[-0.015em]">
                       Real Time Stock Tracker
                     </h2>
@@ -528,8 +528,8 @@ function App() {
                           </Link>
                         </div>
                       </div>
-                    </div>
-                  )}
+              </div>
+            )}
                 </header>
 
                 {/* Hero Component */}
@@ -766,42 +766,42 @@ function App() {
                   <form className="flex flex-col gap-4" onSubmit={handleLogin}>
                     <div>
                       <label htmlFor="username" className="block text-gray-700 dark:text-gray-200 text-sm font-semibold mb-1">Username</label>
-                      <input
-                        type="text"
-                        id="username"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        required
+              <input
+                type="text"
+                id="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
                         className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-stock-green focus:border-stock-green transition"
                         placeholder="Enter your username"
-                      />
-                    </div>
+              />
+            </div>
                     
                     <div>
                       <label htmlFor="password" className="block text-gray-700 dark:text-gray-200 text-sm font-semibold mb-1">Password</label>
-                      <input
-                        type="password"
-                        id="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
+              <input
+                type="password"
+                id="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
                         className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-stock-green focus:border-stock-green transition"
                         placeholder="Enter your password"
-                      />
-                    </div>
+              />
+            </div>
                     
-                    <button
-                      type="submit"
+            <button
+              type="submit"
                       className="w-full py-3 mt-2 rounded-lg bg-gradient-to-r from-stock-green to-blue-500 text-white font-bold text-lg shadow-md hover:from-green-500 hover:to-blue-600 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stock-green"
-                    >
+            >
                       {isLoading ? 'Logging in...' : 'Log In'}
-                    </button>
-                  </form>
+            </button>
+          </form>
                   
                   <div className="text-gray-500 text-xs text-center mt-2">
                     Default credentials: <b>admin / password123</b><br />
                     Make sure your backend server is running on port 5002
-                  </div>
+          </div>
                   
                   <div className="text-center">
                     <p className="text-gray-600 dark:text-gray-300 text-sm">
@@ -810,7 +810,7 @@ function App() {
                         Sign up here
                       </Link>
                     </p>
-                  </div>
+        </div>
                   
                   <Link
                     to="/"
@@ -818,7 +818,7 @@ function App() {
                   >
                     Back to Home
                   </Link>
-                </div>
+      </div>
               </div>
             </div>
           } />
@@ -1188,34 +1188,34 @@ function App() {
         <div className="flex justify-center mb-10 mt-6">
           <div className="w-full">
             <PriceDisplay ticker={selectedTicker} price={prices[selectedTicker] || 0} stats={stats[selectedTicker] || {}} />
-          </div>
+        </div>
         </div>
         {/* Navigation Tabs - with icons, below PriceDisplay */}
         <div className="flex mb-8">
           <div>
             <div className="flex flex-wrap gap-2">
-              {[
-                { key: 'charts', label: 'Charts', icon: <BarChart3 className="w-4 h-4" /> },
-                { key: 'ai', label: 'AI Insights', icon: <Brain className="w-4 h-4" /> },
-                { key: 'predictions', label: 'Predictions', icon: <Target className="w-4 h-4" /> },
-                { key: 'indicators', label: 'Technical', icon: <Activity className="w-4 h-4" /> },
-                { key: 'risk', label: 'Risk Analysis', icon: <Shield className="w-4 h-4" /> },
-                { key: 'news', label: 'News', icon: <Newspaper className="w-4 h-4" /> },
-                { key: 'recommendations', label: 'Recommendations', icon: <Lightbulb className="w-4 h-4" /> }
-              ].map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key as any)}
-                  className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${
-                    activeTab === tab.key
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  {tab.icon}
-                  {tab.label}
-                </button>
-              ))}
+          {[
+            { key: 'charts', label: 'Charts', icon: <BarChart3 className="w-4 h-4" /> },
+            { key: 'ai', label: 'AI Insights', icon: <Brain className="w-4 h-4" /> },
+            { key: 'predictions', label: 'Predictions', icon: <Target className="w-4 h-4" /> },
+            { key: 'indicators', label: 'Technical', icon: <Activity className="w-4 h-4" /> },
+            { key: 'risk', label: 'Risk Analysis', icon: <Shield className="w-4 h-4" /> },
+            { key: 'news', label: 'News', icon: <Newspaper className="w-4 h-4" /> },
+            { key: 'recommendations', label: 'Recommendations', icon: <Lightbulb className="w-4 h-4" /> }
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key as any)}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${
+                activeTab === tab.key
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
             </div>
           </div>
         </div>
@@ -1264,25 +1264,25 @@ function App() {
               </button>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-              {isLoading && (
-                <div className="flex items-center justify-center h-96">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                    <p className="text-gray-500 dark:text-gray-400">Loading historical data...</p>
-                  </div>
+            {isLoading && (
+              <div className="flex items-center justify-center h-96">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                  <p className="text-gray-500 dark:text-gray-400">Loading historical data...</p>
                 </div>
-              )}
-              {error && (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                  {error}
-                </div>
-              )}
-              {!isLoading && !error && customHistory.length > 0 && (
-                <div className="h-96">
-                  {renderChart()}
-                </div>
-              )}
-            </div>
+              </div>
+            )}
+            {error && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                {error}
+              </div>
+            )}
+            {!isLoading && !error && customHistory.length > 0 && (
+              <div className="h-96">
+                {renderChart()}
+              </div>
+            )}
+          </div>
             {/* Historical Data Table */}
             {customHistory.length > 0 && (
               <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
@@ -1368,7 +1368,7 @@ function App() {
             serverUrl={currentServerUrl}
           />
         )}
-      </div>
+            </div>
     </div>
   );
 }
