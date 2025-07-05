@@ -69,6 +69,54 @@ def login():
         logging.error(f"Login error: {e}")
         return jsonify({"error": "Login failed"}), 500
 
+@app.route("/api/history/<ticker>")
+def get_history(ticker):
+    """Get historical data for a ticker"""
+    if ticker not in TICKERS:
+        return jsonify({"error": "Ticker not found"}), 404
+    
+    # Generate mock historical data
+    import random
+    from datetime import datetime, timedelta
+    
+    data = []
+    base_price = price_data.get(ticker, 100.0)
+    
+    for i in range(100):
+        date = datetime.now() - timedelta(days=i)
+        price = base_price + random.uniform(-10, 10)
+        volume = random.randint(1000000, 10000000)
+        
+        data.append({
+            "timestamp": date.isoformat(),
+            "open": price,
+            "high": price + random.uniform(0, 5),
+            "low": price - random.uniform(0, 5),
+            "close": price,
+            "volume": volume
+        })
+    
+    return jsonify(data)
+
+@app.route("/api/stats/<ticker>")
+def get_stats(ticker):
+    """Get statistics for a ticker"""
+    if ticker not in TICKERS:
+        return jsonify({"error": "Ticker not found"}), 404
+    
+    base_price = price_data.get(ticker, 100.0)
+    
+    return jsonify({
+        "ticker": ticker,
+        "price": base_price,
+        "change": random.uniform(-5, 5),
+        "changePercent": random.uniform(-3, 3),
+        "volume": random.randint(1000000, 10000000),
+        "marketCap": random.randint(1000000000, 100000000000),
+        "pe": random.uniform(10, 50),
+        "dividend": random.uniform(0, 5)
+    })
+
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5002))
     logging.info(f"Starting Flask server on port {port}")
